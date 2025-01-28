@@ -1,0 +1,197 @@
+receivers:
+  # tcplog/docker:
+  #   listen_address: "0.0.0.0:2255"
+  #   operators:
+  #     - type: regex_parser
+  #       regex: '^<([0-9]+)>(?P<timestamp>[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})\s+(?P<container_name>[^\s]+)\s+(?P<container_id>[^\s]+)\s+(?P<body>.*)$'
+  #       timestamp:
+  #         parse_from: attributes.timestamp
+  #         layout_type: strptime
+  #         layout: '%b %d %H:%M:%S'
+  #     - type: move
+  #       from: attributes.body
+  #       to: body
+  #     - type: remove
+  #       field: attributes.timestamp
+  #       # please remove names from below if you want to collect logs from them
+  #     - type: filter
+  #       id: signoz_logs_filter
+  #       expr: 'attributes.container_name matches "^signoz-(logspout|frontend|alertmanager|query-service|otel-collector|clickhouse|zookeeper)"'
+  # opencensus:
+  #   endpoint: 0.0.0.0:55678
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  # jaeger:
+  #   protocols:
+  #     grpc:
+  #       endpoint: 0.0.0.0:14250
+  #     thrift_http:
+  #       endpoint: 0.0.0.0:14268
+      # thrift_compact:
+      #   endpoint: 0.0.0.0:6831
+      # thrift_binary:
+      #   endpoint: 0.0.0.0:6832
+  #hostmetrics:
+  #  collection_interval: 30s
+  #  root_path: /hostfs
+  #  scrapers:
+  #    cpu: {}
+  #    load: {}
+  #    memory: {}
+  #    disk: {}
+  #    filesystem: {}
+  #    network: {}
+  hostmetrics:
+    collection_interval: 60s
+    scrapers:
+      cpu: {}
+      disk: {}
+      load: {}
+      filesystem: {}
+      memory: {}
+      network: {}
+      paging: {}
+      process:
+        mute_process_name_error: true
+        mute_process_exe_error: true
+        mute_process_io_error: true
+      processes: {}
+  prometheus:
+    config:
+      global:
+        scrape_interval: 60s
+      scrape_configs:
+        # otel-collector internal metrics
+        - job_name: otel-collector
+          static_configs:
+          - targets:
+              - localhost:8888
+            labels:
+              job_name: otel-collector
+
+processors:
+  batch:
+    send_batch_size: 10000
+    send_batch_max_size: 11000
+    timeout: 10s
+
+  resourcedetection:
+    # Using OTEL_RESOURCE_ATTRIBUTES envvar, env detector adds custom labels.
+    detectors: [env, system] # include ec2 for AWS, gcp for GCP and azure for Azure.
+    timeout: 2s
+  # signozspanmetrics/delta:
+  #   metrics_exporter: clickhousemetricswrite
+  #   metrics_flush_interval: 60s
+  #   latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 50ms, 100ms, 250ms, 500ms, 1000ms, 1400ms, 2000ms, 5s, 10s, 20s, 40s, 60s ]
+  #   dimensions_cache_size: 100000
+  #   aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA
+  #   enable_exp_histogram: true
+  #   dimensions:
+  #     - name: service.namespace
+  #       default: default
+  #     - name: deployment.environment
+  #       default: default
+  #     # This is added to ensure the uniqueness of the timeseries
+  #     # Otherwise, identical timeseries produced by multiple replicas of
+  #     # collectors result in incorrect APM metrics
+  #     - name: signoz.collector.id
+  #     - name: service.version
+  #     - name: browser.platform
+  #     - name: browser.mobile
+  #     - name: k8s.cluster.name
+  #     - name: k8s.node.name
+  #     - name: k8s.namespace.name
+  #     - name: host.name
+  #     - name: host.type
+  #     - name: container.name
+
+# extensions:
+  # health_check:
+  #   endpoint: 0.0.0.0:13133
+  # zpages:
+  #   endpoint: 0.0.0.0:55679
+  # pprof:
+  #   endpoint: 0.0.0.0:1777
+
+exporters:
+  #otlp:
+  #  endpoint: "signoz-otel-collector:4317"  # Using Docker service name
+  #  # endpoint: "localhost:4317"
+  #  tls:
+  #    insecure: true
+  otlp:
+    endpoint: "ingest.in.signoz.cloud:443"
+    tls:
+      insecure: false
+    headers:
+      "signoz-ingestion-key": "6b57bcc0-b17a-4c48-b692-c1d14ccda04c"
+  clickhousetraces:
+    datasource: tcp://default:default123@clickhouse:9000/signoz_traces
+    low_cardinal_exception_grouping: ${env:LOW_CARDINAL_EXCEPTION_GROUPING}
+    use_new_schema: true
+  clickhousemetricswrite:
+    endpoint: tcp://default:default123@clickhouse:9000/signoz_metrics
+    resource_to_telemetry_conversion:
+      enabled: true
+  clickhousemetricswrite/prometheus:
+    endpoint: tcp://default:default123@clickhouse:9000/signoz_metrics
+  clickhousemetricswritev2:
+    dsn: tcp://default:default123@clickhouse:9000/signoz_metrics
+  clickhouselogsexporter:
+    dsn: tcp://default:default123@clickhouse:9000/signoz_logs
+    timeout: 10s
+    use_new_schema: true
+  logging: {}
+
+service:
+  telemetry:
+    logs:
+      encoding: json
+    metrics:
+      address: 0.0.0.0:8888
+
+  # extensions:
+  #   - health_check
+  #   - zpages
+  #   - pprof
+
+  # pipelines:
+  #   traces:
+  #     receivers: [otlp]
+  #     processors: [batch]
+  #     exporters: [otlp]
+
+  #   metrics:
+  #     receivers: [otlp]
+  #     processors: [batch]
+  #     exporters: [otlp]
+
+  #   metrics/hostmetrics:
+  #     receivers: [hostmetrics]
+  #     processors: [resourcedetection, batch]
+  #     exporters: [otlp]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhousetraces, otlp]
+    metrics:
+      receivers: [otlp, hostmetrics]
+      processors: [batch]
+      exporters: [clickhousemetricswrite, clickhousemetricswritev2, otlp]
+    metrics/hostmetrics:
+      receivers: [hostmetrics]
+      processors: [resourcedetection, batch]
+      exporters: [clickhousemetricswrite, clickhousemetricswritev2, otlp]
+    metrics/prometheus:
+      receivers: [prometheus]
+      processors: [batch]
+      exporters: [clickhousemetricswrite/prometheus, clickhousemetricswritev2]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouselogsexporter, otlp]
