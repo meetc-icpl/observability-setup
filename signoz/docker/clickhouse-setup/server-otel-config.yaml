@@ -61,7 +61,7 @@ exporters:
     tls:
       insecure: false
     headers:
-      "signoz-ingestion-key": "6b57bcc0-b17a-4c48-b692-c1d14ccda04c"
+      "signoz-ingestion-key": "REDACTED_CREDENTIAL"
 
   otlp/signoz:
     endpoint: "localhost:4327"
