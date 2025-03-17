@@ -14,3 +14,5 @@ signoz/docker/clickhouse-setup/otel-collector-config.yaml
 signoz/docker/clickhouse-setup/server-otel-config.yaml
 
 signoz/docker/clickhouse-setup/otel-collector-config.yaml
+
+gitleaks_report.json
